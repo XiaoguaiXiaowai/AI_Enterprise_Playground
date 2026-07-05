@@ -84,4 +84,3 @@ async def github_callback(request: Request, db: Session = Depends(get_db)) -> To
     )
     access_token, refresh_token = issue_tokens(db, user=user)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
-

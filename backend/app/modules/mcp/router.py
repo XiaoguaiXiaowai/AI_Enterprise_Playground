@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.auth import User
 from app.modules.auth.dependencies import get_current_user
+from app.modules.hitl.errors import HitlPendingError
 from app.modules.mcp.schemas import (
     McpServerCreateRequest,
     McpServerResponse,
@@ -130,6 +131,11 @@ async def call_tool_endpoint(
             arguments=payload.arguments,
             request_id=request_id,
         )
+    except HitlPendingError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "hitl_pending", "hitl_request_id": e.hitl_request_id},
+        )
     except ValueError as e:
         if str(e) == "server_not_found":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="server_not_found")
@@ -160,4 +166,3 @@ def list_calls(
             )
         )
     return out
-

@@ -5,7 +5,11 @@ export default function HomePage() {
       <p className="mt-4 text-sm text-muted-foreground">
         Backend: http://localhost:8000/docs
       </p>
+      <div className="mt-6">
+        <a className="text-sm text-slate-700 underline" href="/dashboard">
+          Open Dashboard
+        </a>
+      </div>
     </main>
   );
 }
-

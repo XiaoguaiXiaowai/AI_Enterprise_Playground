@@ -39,6 +39,7 @@ Production-style AI engineering playground.
 ### Local (frontend)
 
 - `cd frontend`
+- `cp .env.example .env.local` (optional)
 - `npm install`
 - `npm run dev`
 
@@ -103,3 +104,23 @@ Demo servers (stdio):
 - SQL (read-only):
   - `config.command`: `[python, -m, app.mcp_servers.sql_server]`
   - `config.env.MCP_DATABASE_URL`: database connection string (defaults to app DB)
+
+## Agents
+
+- Run: `POST /agents/runs`
+- Resume run: `POST /agents/runs/{run_id}/resume`
+- List runs: `GET /agents/runs`
+- Get run: `GET /agents/runs/{run_id}`
+
+## HITL
+
+- List requests: `GET /hitl/requests`
+- Get request: `GET /hitl/requests/{hitl_request_id}`
+- Approve: `POST /hitl/requests/{hitl_request_id}/approve`
+- Reject: `POST /hitl/requests/{hitl_request_id}/reject`
+- Edit: `POST /hitl/requests/{hitl_request_id}/edit`
+- Resume: `POST /hitl/requests/{hitl_request_id}/resume`
+
+## Dashboard
+
+- Overview: `GET /dashboard/overview?hours=24&hitl_pending_limit=20&hitl_pending_offset=0`

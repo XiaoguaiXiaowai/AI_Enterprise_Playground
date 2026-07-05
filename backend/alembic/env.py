@@ -11,8 +11,11 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from app.config.settings import get_settings
 from app.core.database import Base
 from app.models import auth as _auth_models
+from app.models import audit as _audit_models
+from app.models import agents as _agents_models
 from app.models import chat as _chat_models
 from app.models import context as _context_models
+from app.models import hitl as _hitl_models
 from app.models import mcp as _mcp_models
 from app.models import memory as _memory_models
 from app.models import rag as _rag_models

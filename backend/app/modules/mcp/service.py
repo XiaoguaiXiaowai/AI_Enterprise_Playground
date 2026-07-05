@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.config.settings import get_settings
 from app.models.mcp import McpServer, McpToolCall
 from app.modules.context.service import log_event
+from app.modules.hitl.errors import HitlPendingError
+from app.modules.hitl.service import create_mcp_tool_call_request, mark_executed
 from app.modules.mcp.transports.stdio import StdioMcpTransport
 from app.modules.mcp.transports.streamable_http import StreamableHttpMcpTransport
 
@@ -25,6 +27,19 @@ def _loads_json(value: str) -> dict:
 
 def _dumps_json(value: dict) -> str:
     return json.dumps(value or {}, ensure_ascii=False, separators=(",", ":"))
+
+
+def _requires_hitl_approval(*, server: McpServer, tool_name: str) -> tuple[bool, str | None]:
+    config = _loads_json(server.config_json)
+    if bool(config.get("requires_approval")):
+        reason = config.get("approval_reason")
+        return True, str(reason) if reason else None
+    name = (tool_name or "").lower()
+    if any(x in name for x in ["write", "delete", "remove", "exec", "update", "patch", "post", "put"]):
+        return True, "high_risk_tool"
+    if server.server_type in {"github", "browser"}:
+        return True, "high_risk_server"
+    return False, None
 
 
 def create_server(
@@ -84,7 +99,7 @@ async def list_tools(
     server = get_server(db, user_id=user_id, server_id=server_id)
     if not server or not server.is_enabled:
         raise ValueError("server_not_found")
-    result = await _call_mcp(db, user_id=user_id, server=server, method="tools/list", params={}, request_id=None)
+    result, _ = await _call_mcp(db, user_id=user_id, server=server, method="tools/list", params={}, request_id=None)
     tools = result.get("tools")
     if isinstance(tools, list):
         return [t for t in tools if isinstance(t, dict)]
@@ -99,21 +114,60 @@ async def call_tool(
     tool_name: str,
     arguments: dict,
     request_id: str | None,
+    bypass_hitl: bool = False,
+    hitl_request_id: int | None = None,
 ) -> dict:
     server = get_server(db, user_id=user_id, server_id=server_id)
     if not server or not server.is_enabled:
         raise ValueError("server_not_found")
-    result = await _call_mcp(
-        db,
-        user_id=user_id,
-        server=server,
-        method="tools/call",
-        params={"name": tool_name, "arguments": arguments or {}},
-        request_id=request_id,
-        tool_name=tool_name,
-        input_payload={"arguments": arguments or {}},
-    )
-    return result
+    if not bypass_hitl:
+        required, reason = _requires_hitl_approval(server=server, tool_name=tool_name)
+        if required:
+            req = create_mcp_tool_call_request(
+                db,
+                user_id=user_id,
+                request_id=request_id,
+                server_id=server.id,
+                tool_name=tool_name,
+                arguments=arguments or {},
+                reason=reason,
+            )
+            raise HitlPendingError(req.id)
+    try:
+        result, call_id = await _call_mcp(
+            db,
+            user_id=user_id,
+            server=server,
+            method="tools/call",
+            params={"name": tool_name, "arguments": arguments or {}},
+            request_id=request_id,
+            tool_name=tool_name,
+            input_payload={"arguments": arguments or {}},
+        )
+        if hitl_request_id is not None:
+            mark_executed(
+                db,
+                hitl_request_id=hitl_request_id,
+                execution_status="ok",
+                result=result,
+                error=None,
+                tool_call_id=call_id,
+            )
+        return result
+    except Exception as e:
+        if hitl_request_id is not None:
+            try:
+                mark_executed(
+                    db,
+                    hitl_request_id=hitl_request_id,
+                    execution_status="error",
+                    result=None,
+                    error=str(e),
+                    tool_call_id=None,
+                )
+            except Exception:
+                pass
+        raise
 
 
 def list_tool_calls(db: Session, *, user_id: int, limit: int = 50) -> list[McpToolCall]:
@@ -131,7 +185,7 @@ async def _call_mcp(
     request_id: str | None,
     tool_name: str | None = None,
     input_payload: dict | None = None,
-) -> dict:
+) -> tuple[dict, int]:
     settings = get_settings()
     config = _loads_json(server.config_json)
 
@@ -174,7 +228,8 @@ async def _call_mcp(
                 event_type="mcp_tool_call",
                 data={"server_id": server.id, "name": server.name, "transport": server.transport, "method": method, "tool_name": tool_name},
             )
-        return result if isinstance(result, dict) else {"result": result}
+        out = result if isinstance(result, dict) else {"result": result}
+        return out, int(call.id)
     except Exception as e:
         call.status = "error"
         call.error_message = str(e)

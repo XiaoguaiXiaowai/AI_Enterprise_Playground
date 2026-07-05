@@ -19,9 +19,12 @@ from app.core.rate_limit import limiter
 from app.middleware.request_context import RequestContextMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.modules.auth.router import router as auth_router
+from app.modules.agents.router import router as agents_router
 from app.modules.chat.router import router as chat_router
 from app.modules.context.router import router as context_router
+from app.modules.dashboard.router import router as dashboard_router
 from app.modules.guardrails.router import router as guardrails_router
+from app.modules.hitl.router import router as hitl_router
 from app.modules.memory.router import router as memory_router
 from app.modules.mcp.router import router as mcp_router
 from app.modules.rag.router import router as rag_router
@@ -49,9 +52,12 @@ def create_app() -> FastAPI:
     app.include_router(create_v1_router(settings.api_version))
     app.include_router(system_router)
     app.include_router(auth_router)
+    app.include_router(agents_router)
     app.include_router(chat_router)
     app.include_router(context_router)
+    app.include_router(dashboard_router)
     app.include_router(guardrails_router)
+    app.include_router(hitl_router)
     app.include_router(memory_router)
     app.include_router(mcp_router)
     app.include_router(rag_router)
